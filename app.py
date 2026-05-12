@@ -219,20 +219,20 @@ def edit_student(student_id):
     return render_template("edit_student.html", student=student)
 
 # ---------------- CAPTURE PHOTO (WEBCAM) ----------------
-@app.route("/capture_photo/<int:student_id>")
-def capture_photo(student_id):
+#@app.route("/capture_photo/<int:student_id>")
+#def capture_photo(student_id):
 
-    script_path = os.path.join(BASE_DIR, "capture_photo.py")
+#    script_path = os.path.join(BASE_DIR, "capture_photo.py")
 
-    subprocess.Popen([
-        "gnome-terminal",
-        "--",
-        "bash",
-        "-c",
-        f"python3 {script_path}; exec bash"
-    ])
+#    subprocess.Popen([
+#        "gnome-terminal",
+#        "--",
+#        "bash",
+#        "-c",
+#        f"python3 {script_path}; exec bash"
+#    ])
 
-    return redirect(f"/edit_student/{student_id}")
+ #   return redirect(f"/edit_student/{student_id}")
 
 
 # ---------------- MANUAL ATTENDANCE ----------------
@@ -293,23 +293,23 @@ def attendance(class_id):
 
 
 # ---------------- AI ATTENDANCE ----------------
-@app.route("/start_ai/<int:class_id>")
-def start_ai(class_id):
+#@app.route("/start_ai/<int:class_id>")
+#def start_ai(class_id):
 
-    script_path = os.path.join(BASE_DIR, "attendance_system.py")
-    venv_python = os.path.join(BASE_DIR, "venv", "bin", "python")
+  #  script_path = os.path.join(BASE_DIR, "attendance_system.py")
+  #  venv_python = os.path.join(BASE_DIR, "venv", "bin", "python")
 
-    command = f"{venv_python} {script_path} {class_id}; exec bash"
+ #   command = f"{venv_python} {script_path} {class_id}; exec bash"
 
-    subprocess.Popen([
-        "gnome-terminal",
-        "--",
-        "bash",
-        "-c",
-        command
-    ])
+#    subprocess.Popen([
+     #   "gnome-terminal",
+    #    "--",
+   #     "bash",
+  #      "-c",
+ #       command
+#    ])
 
-    return redirect("/dashboard")
+ #   return redirect("/dashboard")
 
 
 # ---------------- VIEW REPORT ----------------
