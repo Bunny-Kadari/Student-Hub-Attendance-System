@@ -557,13 +557,80 @@ def logout():
     session.clear()
     return redirect(url_for("home"))
 
-# Compatibility endpoints for existing pages; face recognition requires a local webcam runtime.
+def get_class_access(class_id):
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT c.id,c.semester,c.section,s.dept_id,s.subject_name
+                           FROM classes c JOIN subjects s ON s.id=c.subject_id
+                           WHERE c.id=%s AND (%s='admin' OR c.faculty_id=%s)""",
+                        (class_id, session.get("role"), session.get("user_id")))
+            return cur.fetchone()
+
+
 @app.route("/start_ai/<int:class_id>")
 def start_ai(class_id):
     if not login_required():
         return redirect(url_for("login"))
-    flash("Live webcam face recognition is available only when running on a computer with a connected camera.", "info")
-    return redirect(url_for("dashboard"))
+    class_info = get_class_access(class_id)
+    if not class_info:
+        return "Access denied", 403
+    return render_template("face_attendance.html", class_info=class_info)
+
+
+@app.route("/api/face-roster/<int:class_id>")
+def face_roster(class_id):
+    if not login_required():
+        return {"error": "Login required."}, 401
+    class_info = get_class_access(class_id)
+    if not class_info:
+        return {"error": "Access denied."}, 403
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT st.id,st.hub_id,st.name,fd.descriptor
+                           FROM students st JOIN face_data fd ON fd.student_id=st.id
+                           WHERE st.dept_id=%s AND st.semester=%s
+                             AND COALESCE(st.section,'')=COALESCE(%s,'')
+                             AND fd.descriptor IS NOT NULL ORDER BY st.name""",
+                        (class_info["dept_id"],class_info["semester"],class_info["section"]))
+            rows = cur.fetchall()
+    return {"students":[{"id":r["id"],"hub_id":r["hub_id"],"name":r["name"],"descriptor":r["descriptor"]} for r in rows],
+            "registered_count":len(rows)}
+
+
+@app.route("/api/face-attendance/<int:class_id>", methods=["POST"])
+def save_face_attendance(class_id):
+    if not login_required():
+        return {"error":"Login required."},401
+    class_info=get_class_access(class_id)
+    if not class_info:
+        return {"error":"Access denied."},403
+    payload=request.get_json(silent=True) or {}
+    ids=payload.get("recognized_ids",[])
+    if not isinstance(ids,list) or len(ids)>500:
+        return {"error":"Invalid attendance list."},400
+    try:
+        ids=list({int(value) for value in ids})
+    except (TypeError,ValueError):
+        return {"error":"Invalid student IDs."},400
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT id FROM students WHERE dept_id=%s AND semester=%s
+                           AND COALESCE(section,'')=COALESCE(%s,'')""",
+                        (class_info["dept_id"],class_info["semester"],class_info["section"]))
+            eligible={row["id"] for row in cur.fetchall()}
+            if not set(ids).issubset(eligible):
+                return {"error":"A student does not belong to this class."},400
+            cur.execute("""INSERT INTO attendance(student_id,class_id,date,status)
+                           SELECT id,%s,CURRENT_DATE,'Absent' FROM students
+                           WHERE dept_id=%s AND semester=%s AND COALESCE(section,'')=COALESCE(%s,'')
+                           ON CONFLICT(student_id,class_id,date) DO UPDATE SET status='Absent'""",
+                        (class_id,class_info["dept_id"],class_info["semester"],class_info["section"]))
+            if ids:
+                cur.execute("""UPDATE attendance SET status='Present'
+                               WHERE class_id=%s AND date=CURRENT_DATE AND student_id=ANY(%s)""",
+                            (class_id,ids))
+    return {"status":"saved","present_count":len(ids),"class_strength":len(eligible),"message":"Attendance saved."}
+
 
 @app.route("/health")
 def health():
