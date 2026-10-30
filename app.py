@@ -1,5 +1,5 @@
 import os
-import secrets
+import hmac
 import psycopg
 from psycopg.rows import dict_row
 from flask import Flask, render_template, request, redirect, session, url_for, flash
@@ -9,8 +9,9 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY")
 if not app.secret_key:
-    # Local-development fallback only. Set SECRET_KEY in Render before deployment.
-    app.secret_key = secrets.token_urlsafe(32)
+    raise RuntimeError("SECRET_KEY is required. Configure it in Render Environment Variables before starting the app.")
+
+ADMIN_SETUP_TOKEN = os.environ.get("ADMIN_SETUP_TOKEN", "")
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "static", "known_faces")
@@ -89,7 +90,7 @@ def scalar(query, params=()):
             return next(iter(row.values())) if row else None
 
 def admin_exists():
-    return bool(scalar("SELECT EXISTS(SELECT 1 FROM users WHERE role='admin') AS exists"))
+    return bool(scalar("SELECT EXISTS(SELECT 1 FROM users WHERE role='admin') AS has_admin"))
 
 @app.before_request
 def ensure_schema():
@@ -107,7 +108,12 @@ def home():
 def setup():
     if admin_exists():
         return redirect(url_for("login"))
+    if not ADMIN_SETUP_TOKEN:
+        return "Initial setup is locked. Configure ADMIN_SETUP_TOKEN in Render Environment Variables first.", 503
     if request.method == "POST":
+        submitted_token = request.form.get("setup_token", "")
+        if not hmac.compare_digest(submitted_token, ADMIN_SETUP_TOKEN):
+            return render_template("setup.html", error="Invalid setup token.")
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         confirm = request.form.get("confirm_password", "")
@@ -415,6 +421,11 @@ def attendance(class_id):
         return redirect(url_for("login"))
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            if session.get("role") != "admin":
+                cur.execute("SELECT 1 FROM classes WHERE id=%s AND faculty_id=%s",
+                            (class_id, session.get("user_id")))
+                if not cur.fetchone():
+                    return "Access denied", 403
             cur.execute("SELECT id,name FROM students ORDER BY name")
             students = cur.fetchall()
             if request.method == "POST":
@@ -436,6 +447,11 @@ def view_report(class_id):
         return redirect(url_for("login"))
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            if session.get("role") != "admin":
+                cur.execute("SELECT 1 FROM classes WHERE id=%s AND faculty_id=%s",
+                            (class_id, session.get("user_id")))
+                if not cur.fetchone():
+                    return "Access denied", 403
             cur.execute("""SELECT students.name,attendance.date,attendance.status
                            FROM attendance JOIN students ON attendance.student_id=students.id
                            WHERE attendance.class_id=%s ORDER BY attendance.date DESC""", (class_id,))
