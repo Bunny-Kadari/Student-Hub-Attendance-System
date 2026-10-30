@@ -2,6 +2,7 @@ import os
 import hmac
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -75,7 +76,8 @@ def init_db():
         """CREATE TABLE IF NOT EXISTS face_data (
             id BIGSERIAL PRIMARY KEY,
             student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-            dataset_path TEXT NOT NULL
+            dataset_path TEXT NOT NULL,
+            descriptor JSONB
         )"""
     ]
     with get_db_connection() as conn:
@@ -84,6 +86,8 @@ def init_db():
             cur.execute("SELECT pg_advisory_xact_lock(2026103001)")
             for statement in statements:
                 cur.execute(statement)
+            # Safe additive migration for existing databases.
+            cur.execute("ALTER TABLE face_data ADD COLUMN IF NOT EXISTS descriptor JSONB")
 
 def scalar(query, params=()):
     with get_db_connection() as conn:
@@ -268,6 +272,52 @@ def add_student():
     except psycopg.errors.UniqueViolation:
         flash("That Hub ID already exists.", "danger")
     return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/student/<int:student_id>/face")
+def register_student_face(student_id):
+    if not admin_required():
+        return redirect(url_for("login"))
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id,hub_id,name FROM students WHERE id=%s", (student_id,))
+            student = cur.fetchone()
+    if not student:
+        return "Student not found", 404
+    return render_template("face_register.html", student=student)
+
+
+@app.route("/api/admin/student/<int:student_id>/face", methods=["POST"])
+def save_student_face(student_id):
+    if not admin_required():
+        return {"error": "Admin login required."}, 401
+    payload = request.get_json(silent=True) or {}
+    descriptor = payload.get("descriptor")
+    if not isinstance(descriptor, list) or len(descriptor) != 128:
+        return {"error": "A valid 128-value face descriptor is required."}, 400
+    try:
+        values = [float(value) for value in descriptor]
+    except (TypeError, ValueError):
+        return {"error": "Face descriptor contains invalid values."}, 400
+    import math
+    if not all(math.isfinite(value) for value in values):
+        return {"error": "Face descriptor contains invalid values."}, 400
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM students WHERE id=%s", (student_id,))
+            if not cur.fetchone():
+                return {"error": "Student not found."}, 404
+            cur.execute("""UPDATE face_data
+                           SET descriptor=%s,dataset_path=%s
+                           WHERE id=(SELECT id FROM face_data WHERE student_id=%s
+                                     ORDER BY id DESC LIMIT 1)""",
+                        (Jsonb(values), "browser-face-api", student_id))
+            if cur.rowcount == 0:
+                cur.execute("""INSERT INTO face_data(student_id,dataset_path,descriptor)
+                               VALUES (%s,%s,%s)""",
+                            (student_id, "browser-face-api", Jsonb(values)))
+    return {"status": "saved", "message": "Face data registered successfully."}
+
 
 @app.route("/students")
 def student_list():
