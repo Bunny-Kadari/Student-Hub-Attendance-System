@@ -80,6 +80,8 @@ def init_db():
     ]
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            # Serialize first-time schema creation across Gunicorn workers.
+            cur.execute("SELECT pg_advisory_xact_lock(2026103001)")
             for statement in statements:
                 cur.execute(statement)
 
