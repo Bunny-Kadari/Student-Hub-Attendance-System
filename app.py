@@ -10,6 +10,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY")
 if not app.secret_key:
     raise RuntimeError("SECRET_KEY is required. Configure it in Render Environment Variables before starting the app.")
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 
 ADMIN_SETUP_TOKEN = os.environ.get("ADMIN_SETUP_TOKEN", "")
 
@@ -483,7 +484,7 @@ def student_dashboard():
         return redirect(url_for("student_login"))
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(DISTINCT (class_id,date)) AS n FROM attendance WHERE student_id=%s",
+            cur.execute("SELECT COUNT(*) AS n FROM attendance WHERE student_id=%s",
                         (session["student_id"],))
             total_classes = cur.fetchone()["n"] or 0
             cur.execute("SELECT COUNT(*) AS n FROM attendance WHERE student_id=%s AND status='Present'",
