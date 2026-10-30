@@ -1,173 +1,66 @@
-🎓 Student Hub Attendance System
+# RGUKT Student Hub Attendance System
 
-A smart attendance management system built using Python, Flask, SQLite, OpenCV, and Face Recognition.
-This project helps colleges manage student attendance digitally with admin and student dashboards, attendance reports, and AI-based face recognition support.
+A Flask-based attendance management system with Admin, Faculty and Student accounts, manual attendance entry, class assignment and student attendance reports.
 
----
+## Fresh deployment architecture
 
-🚀 Features
+- Flask + Gunicorn on Render.
+- PostgreSQL database through the `DATABASE_URL` environment variable.
+- Passwords are stored as secure Werkzeug password hashes.
+- No sample users, passwords, students, faculty, or attendance records are inserted.
+- The first Admin account is created once through a setup page protected by your private `ADMIN_SETUP_TOKEN`.
 
-👨‍💼 Admin Features
+## Deploy on Render
 
-* Admin Login Authentication
-* Add / Edit / Delete Students
-* Student Attendance Management
-* Attendance Reports
-* Dashboard Interface
-* Webcam Image Capture
-* Manual Photo Upload
+1. Create a PostgreSQL database with a provider such as Neon. Copy its PostgreSQL connection string. Use an SSL-enabled connection string.
+2. In Render, create a new **Web Service** from this repository and select branch `fresh-postgres-admin-controlled`.
+3. Build command: `pip install -r requirements.txt`.
+4. Start command: `gunicorn --workers 2 --bind 0.0.0.0:$PORT app:app` (the included Procfile already contains this command).
+5. Add these environment variables in Render:
+   - `DATABASE_URL`: the PostgreSQL connection string.
+   - `SECRET_KEY`: a long random secret. Generate one locally with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
+   - `ADMIN_SETUP_TOKEN`: a long private token that only you know. You will enter this token once on the first setup page.
+6. Deploy. On the first visit, choose **Initial Admin Setup**, enter your private setup token, and choose your own Admin username and password.
+7. After logging in, use the Admin Control Panel in this order:
+   1. Add Departments (for example CSE, ECE).
+   2. Create Faculty accounts and choose their usernames/passwords.
+   3. Create subjects and assign each class to a faculty member.
+   4. Create Student accounts, setting each Hub ID and password.
+8. Faculty sign in with username/password. Students sign in with Hub ID/password.
 
-👨‍🎓 Student Features
+## Account control
 
-* Student Login
-* View Attendance Records
-* Attendance Percentage
-* Student Dashboard
+- The first Admin is selected by you; the setup form is protected by `ADMIN_SETUP_TOKEN`.
+- Public Admin setup closes as soon as the first Admin is created.
+- Only Admin can add/delete Faculty and add/edit/delete Students.
+- Admin can reset Faculty and Student passwords.
+- Admin, Faculty and Students can change their own password.
+- Passwords are never stored as plain text.
+- There are no default credentials. Do not share your Admin password or setup token.
 
-🤖 AI / Face Recognition Features
+## Local development
 
-* Real-time Face Recognition
-* Webcam Attendance Detection
-* Face Dataset Management
-* Automatic Attendance Marking
-
----
-
-🛠️ Tech Stack
-
-| Technology | Usage                   |
-| ---------- | ----------------------- |
-| Python     | Backend Logic           |
-| Flask      | Web Framework           |
-| SQLite     | Database                |
-| HTML/CSS   | Frontend                |
-| JavaScript | Client-side Interaction |
-| OpenCV     | Webcam Processing       |
-| dlib       | Face Recognition        |
-| Bootstrap  | UI Design               |
-
----
-
-📂 Project Structure
+Set the three environment variables first, then:
 
 ```bash
-Student-Hub-Attendance-System/
-│
-├── app.py
-├── create_db.py
-├── insert_data.py
-├── attendance_system.py
-├── webcam_face.py
-├── face_recognition_live.py
-├── capture_photo.py
-├── hub.db
-│
-├── templates/
-│   ├── login.html
-│   ├── dashboard.html
-│   ├── add_student.html
-│   ├── edit_student.html
-│   ├── attendance.html
-│   └── ...
-│
-├── static/
-│   └── known_faces/
-│
-└── README.md
-```
-
----
-
-⚙️ Installation & Setup
-
- 1️⃣ Clone Repository
-
-```bash
-git clone https://github.com/Bunny-Kadari/Student-Hub-Attendance-System.git
-cd Student-Hub-Attendance-System
-```
-
----
-
- 2️⃣ Create Virtual Environment
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
----
-
- 3️⃣ Install Dependencies
-
-```bash
-pip install flask opencv-python face_recognition numpy pandas
-```
-
----
-
- 4️⃣ Run Project
-
-```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+export DATABASE_URL='your-postgresql-connection-string'
+export SECRET_KEY='your-long-random-secret'
+export ADMIN_SETUP_TOKEN='your-private-one-time-setup-token'
 python3 app.py
 ```
 
-Open in browser:
+Open `http://127.0.0.1:5001`.
 
-```bash
-http://127.0.0.1:5001
-```
+## Important deployment notes
 
----
+- The old SQLite `hub.db` is not imported. The new PostgreSQL database starts with empty tables. Old sample logins and seed records are not used.
+- `insert_data.py` intentionally inserts no sample data.
+- Render's local filesystem is not persistent on a Free Web Service. Student photo uploads are currently stored locally and may disappear after a redeploy/restart; configure persistent object storage before depending on those photos in production.
+- The `/start_ai/<class_id>` endpoint displays a notice. Live webcam face recognition is not hosted by this web deployment; browser/server webcam access needs a separate local or device-side implementation.
 
- 📸 Screenshots
+## Project author
 
-* Login Page <img width="1366" height="599" alt="image" src="https://github.com/user-attachments/assets/30692aef-1c59-4cc4-b69c-b4406321f369" />
-
-* Admin Dashboard <img width="1366" height="599" alt="image" src="https://github.com/user-attachments/assets/c17bd5e2-3923-4530-81a8-3cd1e13d8ad2" />
-
-* Student Dashboard <img width="1366" height="599" alt="image" src="https://github.com/user-attachments/assets/26b5d6f1-b28f-4641-a4a4-3868d0859a4f" />
-
-* Attendance Page <img width="1366" height="599" alt="image" src="https://github.com/user-attachments/assets/7327f07c-095a-44ee-81fe-47d190aa6620" />
-
-* Face Recognition Detection <img width="1366" height="599" alt="image" src="https://github.com/user-attachments/assets/011bdba6-668b-4a38-8352-65ca27bda759" />
-
-
----
-
- 🔒 Future Improvements
-
-* Cloud Database Integration
-* Mobile Application
-* QR Attendance System
-* Email Notifications
-* AI Attendance Analytics
-* Multi-Admin Support
-
----
-
-
-🌐 **Live Website:**
-https://student-hub-attendance-system.onrender.com
-
-
- 👨‍💻 Author
-
-**Kadari Bunny**
-B.Tech CSE Student
-Passionate about AI, Full Stack Development, and Real-World Projects.
-
-GitHub:
-https://github.com/Bunny-Kadari
-
----
-
-⭐ Support
-
-If you like this project:
-
-* Give it a ⭐ on GitHub
-* Share with others
-* Contribute improvements
-
----
+Kadari Bunny · B.Tech CSE
