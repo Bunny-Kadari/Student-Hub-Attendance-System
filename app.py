@@ -586,15 +586,28 @@ def face_roster(class_id):
         return {"error": "Access denied."}, 403
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute("""SELECT COUNT(*) AS total,
+                                  COUNT(*) FILTER (WHERE COALESCE(section,'')=COALESCE(%s,'')) AS section_total
+                           FROM students WHERE dept_id=%s AND semester=%s""",
+                        (class_info["section"],class_info["dept_id"],class_info["semester"]))
+            counts=cur.fetchone()
+            cur.execute("""SELECT COUNT(DISTINCT st.id) AS enrolled
+                           FROM students st JOIN face_data fd ON fd.student_id=st.id
+                           WHERE st.dept_id=%s AND st.semester=%s AND fd.descriptor IS NOT NULL""",
+                        (class_info["dept_id"],class_info["semester"]))
+            enrolled=cur.fetchone()["enrolled"]
             cur.execute("""SELECT st.id,st.hub_id,st.name,fd.descriptor
                            FROM students st JOIN face_data fd ON fd.student_id=st.id
                            WHERE st.dept_id=%s AND st.semester=%s
                              AND COALESCE(st.section,'')=COALESCE(%s,'')
                              AND fd.descriptor IS NOT NULL ORDER BY st.name""",
                         (class_info["dept_id"],class_info["semester"],class_info["section"]))
-            rows = cur.fetchall()
+            rows=cur.fetchall()
     return {"students":[{"id":r["id"],"hub_id":r["hub_id"],"name":r["name"],"descriptor":r["descriptor"]} for r in rows],
-            "registered_count":len(rows)}
+            "registered_count":len(rows),"class_strength":counts["section_total"],
+            "students_in_department_semester":counts["total"],
+            "registered_in_department_semester":enrolled,
+            "class_section":class_info["section"] or ""}
 
 
 @app.route("/api/face-attendance/<int:class_id>", methods=["POST"])
