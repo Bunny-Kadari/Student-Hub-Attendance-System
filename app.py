@@ -305,6 +305,110 @@ def edit_student(student_id):
                 return redirect(url_for("student_list"))
     return render_template("edit_student.html", student=student)
 
+
+@app.route("/admin/department/add", methods=["POST"])
+def add_department():
+    if not admin_required():
+        return redirect(url_for("login"))
+    dept_name = request.form.get("dept_name", "").strip().upper()
+    if not dept_name:
+        flash("Department name is required.", "danger")
+        return redirect(url_for("admin_panel"))
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO departments(dept_name) VALUES (%s)", (dept_name,))
+        flash("Department added.", "success")
+    except psycopg.errors.UniqueViolation:
+        flash("Department already exists.", "danger")
+    return redirect(url_for("admin_panel"))
+
+@app.route("/admin/class/add", methods=["POST"])
+def add_class():
+    if not admin_required():
+        return redirect(url_for("login"))
+    code = request.form.get("subject_code", "").strip().upper()
+    name = request.form.get("subject_name", "").strip()
+    dept_id = request.form.get("dept_id")
+    semester = request.form.get("semester")
+    faculty_id = request.form.get("faculty_id")
+    section = request.form.get("section", "").strip()
+    if not all([code, name, dept_id, semester, faculty_id]):
+        flash("Complete all subject and class fields.", "danger")
+        return redirect(url_for("admin_panel"))
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""INSERT INTO subjects(subject_code,subject_name,dept_id,semester)
+                           VALUES (%s,%s,%s,%s) RETURNING id""", (code,name,dept_id,semester))
+            subject_id = cur.fetchone()["id"]
+            cur.execute("""INSERT INTO classes(subject_id,faculty_id,semester,section)
+                           VALUES (%s,%s,%s,%s)""", (subject_id,faculty_id,semester,section))
+    flash("Subject created and class assigned.", "success")
+    return redirect(url_for("admin_panel"))
+
+@app.route("/admin/user/<int:user_id>/reset-password", methods=["POST"])
+def reset_faculty_password(user_id):
+    if not admin_required():
+        return redirect(url_for("login"))
+    password = request.form.get("password", "")
+    if len(password) < 10:
+        flash("New password must contain at least 10 characters.", "danger")
+        return redirect(url_for("admin_panel"))
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET password_hash=%s WHERE id=%s AND role='faculty'",
+                        (generate_password_hash(password),user_id))
+            changed = cur.rowcount
+    flash("Faculty password updated." if changed else "Faculty account not found.", "success" if changed else "danger")
+    return redirect(url_for("admin_panel"))
+
+@app.route("/admin/student/<int:student_id>/reset-password", methods=["POST"])
+def reset_student_password(student_id):
+    if not admin_required():
+        return redirect(url_for("login"))
+    password = request.form.get("password", "")
+    if len(password) < 10:
+        flash("New password must contain at least 10 characters.", "danger")
+        return redirect(url_for("admin_panel"))
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE students SET password_hash=%s WHERE id=%s",
+                        (generate_password_hash(password),student_id))
+            changed = cur.rowcount
+    flash("Student password updated." if changed else "Student not found.", "success" if changed else "danger")
+    return redirect(url_for("admin_panel"))
+
+@app.route("/change_password", methods=["GET", "POST"])
+def change_password():
+    is_student = "student_id" in session
+    is_user = "user_id" in session
+    if not (is_student or is_user):
+        return redirect(url_for("login"))
+    error = None
+    if request.method == "POST":
+        current = request.form.get("current_password", "")
+        new = request.form.get("new_password", "")
+        confirm = request.form.get("confirm_password", "")
+        if len(new) < 10:
+            error = "New password must contain at least 10 characters."
+        elif new != confirm:
+            error = "New passwords do not match."
+        else:
+            table, key, record_id = ("students","id",session["student_id"]) if is_student else ("users","id",session["user_id"])
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"SELECT password_hash FROM {table} WHERE {key}=%s", (record_id,))
+                    row = cur.fetchone()
+                    if not row or not check_password_hash(row["password_hash"], current):
+                        error = "Current password is incorrect."
+                    else:
+                        cur.execute(f"UPDATE {table} SET password_hash=%s WHERE {key}=%s",
+                                    (generate_password_hash(new),record_id))
+            if not error:
+                flash("Password changed successfully.", "success")
+                return redirect(url_for("student_dashboard" if is_student else "dashboard"))
+    return render_template("change_password.html", error=error)
+
 @app.route("/attendance/<int:class_id>", methods=["GET", "POST"])
 def attendance(class_id):
     if not login_required():
