@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Register Student Face</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>video{width:100%;max-width:720px;border-radius:14px;background:#111}.camera-wrap{background:#111;border-radius:16px;padding:10px;text-align:center}</style>
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-dark bg-dark px-3"><a class="btn btn-outline-light btn-sm" href="/admin">Back to Admin</a><span class="navbar-brand">Student Hub · Face Registration</span></nav>
+<main class="container py-4"><div class="card shadow-sm mx-auto" style="max-width:850px"><div class="card-body p-4">
+<h3>Register Face</h3>
+<p class="text-muted mb-1">Student: <strong>{{ student.name }}</strong> · {{ student.hub_id }}</p>
+<p class="small text-muted">Ask the student to face the camera directly in good lighting. This stores a face descriptor for matching; it does not store a webcam photo.</p>
+<div id="status" class="alert alert-info">Loading face recognition models…</div>
+<div class="camera-wrap mb-3"><video id="video" autoplay muted playsinline></video></div>
+<div class="d-flex flex-wrap gap-2"><button id="startBtn" class="btn btn-primary" disabled>Start Camera</button><button id="captureBtn" class="btn btn-success" disabled>Capture & Register Face</button><button id="stopBtn" class="btn btn-outline-secondary" disabled>Stop Camera</button></div>
+</div></div></main>
+<script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>
+const video=document.getElementById("video"),statusBox=document.getElementById("status");
+const startBtn=document.getElementById("startBtn"),captureBtn=document.getElementById("captureBtn"),stopBtn=document.getElementById("stopBtn");
+const MODEL_URL="https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
+let stream=null;
+function setStatus(message,kind="info"){statusBox.className="alert alert-"+kind;statusBox.textContent=message;}
+async function loadModels(){try{await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)]);startBtn.disabled=false;setStatus("Models loaded. Click Start Camera and allow camera access.","success");}catch(e){setStatus("Could not load face models. Check internet connection and refresh this page.","danger");}}
+startBtn.addEventListener("click",async()=>{try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false});video.srcObject=stream;await video.play();captureBtn.disabled=false;stopBtn.disabled=false;startBtn.disabled=true;setStatus("Camera is on. Keep one student's face centered and clearly visible.","success");}catch(e){setStatus("Camera access failed. Use HTTPS and allow camera permission in your browser.","danger");}});
+captureBtn.addEventListener("click",async()=>{captureBtn.disabled=true;setStatus("Detecting face… please hold still.");try{const result=await faceapi.detectSingleFace(video,new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5})).withFaceLandmarks().withFaceDescriptor();if(!result){setStatus("No clear face detected. Improve lighting, look at the camera and try again.","warning");captureBtn.disabled=false;return;}const response=await fetch("/api/admin/student/{{ student.id }}/face",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({descriptor:Array.from(result.descriptor)})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Could not save face data.");setStatus("Face registered successfully for {{ student.name }}. You can stop the camera now.","success");}catch(e){setStatus(e.message||"Face registration failed. Please try again.","danger");}finally{captureBtn.disabled=false;}});
+stopBtn.addEventListener("click",()=>{if(stream)stream.getTracks().forEach(track=>track.stop());stream=null;video.srcObject=null;captureBtn.disabled=true;stopBtn.disabled=true;startBtn.disabled=false;setStatus("Camera stopped.","secondary");});
+window.addEventListener("beforeunload",()=>{if(stream)stream.getTracks().forEach(track=>track.stop());});
+loadModels();
+</script>
+</body></html>
