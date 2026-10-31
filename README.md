@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎓 Student Hub Attendance System
+# 🎓 Attendora Attendance System
 
 ### Smart Academic Management · Faculty-Controlled Attendance · Browser-Based Face Recognition
 
@@ -274,7 +274,7 @@ Open http://127.0.0.1:5001 in your browser.
 **Kadari Bunny**  
 B.Tech — Computer Science and Engineering
 
-**Project:** Student Hub Attendance System  
+**Project:** Attendora Attendance System  
 **Live Demo:** https://student-hub-fresh.onrender.com/
 
 ---
