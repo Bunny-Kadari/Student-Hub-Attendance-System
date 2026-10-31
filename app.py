@@ -210,7 +210,16 @@ def admin_panel():
             students = cur.fetchall()
             cur.execute("SELECT id,dept_name FROM departments ORDER BY dept_name")
             departments = cur.fetchall()
-    return render_template("admin.html", users=users, students=students, departments=departments)
+            cur.execute("""SELECT c.id,c.semester,c.section,s.subject_code,s.subject_name,
+                                  s.dept_id,d.dept_name,u.id AS faculty_id,u.username AS faculty_name
+                           FROM classes c
+                           JOIN subjects s ON s.id=c.subject_id
+                           JOIN departments d ON d.id=s.dept_id
+                           JOIN users u ON u.id=c.faculty_id
+                           ORDER BY s.subject_name,u.username""")
+            classes = cur.fetchall()
+    return render_template("admin.html", users=users, students=students,
+                           departments=departments, classes=classes)
 
 @app.route("/admin/faculty/add", methods=["POST"])
 def add_faculty():
@@ -404,6 +413,62 @@ def add_class():
                            VALUES (%s,%s,%s,%s)""", (subject_id,faculty_id,semester,section))
     flash("Subject created and class assigned.", "success")
     return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/class/<int:class_id>/edit", methods=["GET","POST"])
+def edit_class(class_id):
+    if not admin_required():
+        return redirect(url_for("login"))
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT c.id,c.semester,c.section,c.subject_id,c.faculty_id,
+                                  s.subject_code,s.subject_name,s.dept_id
+                           FROM classes c JOIN subjects s ON s.id=c.subject_id
+                           WHERE c.id=%s""",(class_id,))
+            class_row=cur.fetchone()
+            if not class_row:
+                return "Class not found",404
+            cur.execute("SELECT id,dept_name FROM departments ORDER BY dept_name")
+            departments=cur.fetchall()
+            cur.execute("SELECT id,username FROM users WHERE role='faculty' ORDER BY username")
+            faculty=cur.fetchall()
+            if request.method=="POST":
+                code=request.form.get("subject_code","").strip().upper()
+                name=request.form.get("subject_name","").strip()
+                dept_id=request.form.get("dept_id")
+                semester=request.form.get("semester")
+                faculty_id=request.form.get("faculty_id")
+                section=request.form.get("section","").strip()
+                if not all([code,name,dept_id,semester,faculty_id]):
+                    flash("Complete all class details.","danger")
+                else:
+                    cur.execute("""UPDATE subjects SET subject_code=%s,subject_name=%s,
+                                   dept_id=%s,semester=%s WHERE id=%s""",
+                                (code,name,dept_id,semester,class_row["subject_id"]))
+                    cur.execute("""UPDATE classes SET semester=%s,section=%s,faculty_id=%s
+                                   WHERE id=%s""",(semester,section,faculty_id,class_id))
+                    flash("Class allocation updated successfully.","success")
+                    return redirect(url_for("admin_panel"))
+    return render_template("edit_class.html", class_row=class_row,
+                           departments=departments, faculty=faculty)
+
+
+@app.route("/admin/class/<int:class_id>/delete", methods=["POST"])
+def delete_class(class_id):
+    if not admin_required():
+        return redirect(url_for("login"))
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM classes WHERE id=%s RETURNING subject_id",(class_id,))
+            deleted=cur.fetchone()
+            if deleted:
+                cur.execute("DELETE FROM subjects WHERE id=%s AND NOT EXISTS "
+                            "(SELECT 1 FROM classes WHERE subject_id=%s)",
+                            (deleted["subject_id"],deleted["subject_id"]))
+    flash("Class allocation and its attendance records deleted." if deleted
+          else "Class allocation not found.","warning" if deleted else "danger")
+    return redirect(url_for("admin_panel"))
+
 
 @app.route("/admin/user/<int:user_id>/reset-password", methods=["POST"])
 def reset_faculty_password(user_id):
