@@ -1,1 +1,75 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RGUKT Hub</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="bg-dark text-white d-flex align-items-center justify-content-center min-vh-100"><main class="text-center p-4"><h1 class="mb-3">RGUKT Smart Attendance System</h1><p class="text-white-50 mb-4">Student · Faculty · Attendance Management</p>{% if setup_needed %}<a href="/setup" class="btn btn-warning btn-lg m-2">Initial Admin Setup</a>{% else %}<a href="/login" class="btn btn-primary btn-lg m-2">Admin / Faculty Login</a>{% endif %}<a href="/student_login" class="btn btn-success btn-lg m-2">Student Login</a></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RGUKT Smart Attendance | Student Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+:root{--navy:#101b35;--blue:#3867f5;--cyan:#65d5e8;--ink:#17233e;--muted:#66738d;--paper:#f5f8ff}
+*{box-sizing:border-box}body{margin:0;font-family:'DM Sans',sans-serif;color:var(--ink);background:var(--paper)}a{text-decoration:none}
+.site-nav{height:82px;display:flex;align-items:center;justify-content:space-between;padding:0 clamp(22px,6vw,90px);background:rgba(255,255,255,.94);border-bottom:1px solid #e8edf7;position:relative;z-index:2}
+.brand{display:flex;align-items:center;gap:12px;color:var(--navy);font-weight:800;font-family:Manrope,sans-serif;font-size:18px}.brand-mark{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#315df0,#54cbe0);display:grid;place-items:center;color:white;font-size:23px;box-shadow:0 8px 20px #3867f544}.brand small{display:block;font-size:10px;letter-spacing:1.7px;color:#77839a;font-weight:700;margin-top:2px}
+.nav-right{display:flex;align-items:center;gap:24px;color:#63708a;font-size:14px}.nav-right span{display:flex;align-items:center;gap:7px}
+.hero{position:relative;overflow:hidden;background:linear-gradient(112deg,rgba(12,24,51,.97) 0%,rgba(18,42,86,.91) 48%,rgba(22,57,91,.55) 100%),url('https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=2000&q=85') center/cover;min-height:590px;display:flex;align-items:center;color:#fff}
+.hero:before{content:"";position:absolute;width:520px;height:520px;border:1px solid #ffffff18;border-radius:50%;right:-100px;top:-190px;box-shadow:0 0 0 55px #ffffff08,0 0 0 110px #ffffff06}
+.hero-inner{width:min(1220px,90%);margin:auto;display:grid;grid-template-columns:1.08fr .92fr;gap:45px;align-items:center;padding:78px 0;position:relative}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;border:1px solid #ffffff3b;background:#ffffff12;padding:9px 14px;border-radius:30px;color:#d7f7ff;font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase}
+h1{font-family:Manrope,sans-serif;font-size:clamp(38px,5.1vw,66px);line-height:1.1;letter-spacing:-2.4px;margin:24px 0 18px;font-weight:800}.hero h1 span{background:linear-gradient(90deg,#8ee6f2,#83a8ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-copy{font-size:17px;line-height:1.8;color:#d1daeb;max-width:590px;margin:0 0 30px}
+.actions{display:flex;gap:14px;flex-wrap:wrap}.btn-main,.btn-alt{padding:15px 22px;border-radius:12px;display:inline-flex;align-items:center;gap:11px;font-weight:700;font-size:15px;transition:.2s}.btn-main{background:linear-gradient(110deg,#426cf8,#2e9fe4);color:#fff;box-shadow:0 12px 28px #2467ed55}.btn-alt{border:1px solid #ffffff65;color:white;background:#ffffff12}.btn-main:hover,.btn-alt:hover{transform:translateY(-3px);color:white;filter:brightness(1.08)}
+.hero-visual{position:relative;min-height:355px;display:flex;align-items:center;justify-content:center}.visual-card{width:min(440px,100%);background:#ffffff12;border:1px solid #ffffff38;backdrop-filter:blur(14px);border-radius:24px;padding:20px;box-shadow:0 30px 70px #0005;transform:rotate(2deg)}
+.visual-photo{height:210px;border-radius:16px;background:linear-gradient(0deg,#101b35aa,#101b3500),url('https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1000&q=85') center/cover;position:relative;overflow:hidden}
+.photo-tag{position:absolute;left:14px;bottom:14px;background:#ffffffeb;color:#183052;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700}
+.visual-bottom{display:flex;justify-content:space-between;align-items:center;padding:18px 3px 2px}.visual-bottom strong{display:block;font-family:Manrope;font-size:16px}.visual-bottom small{color:#d5e2f2}.live-pill{border-radius:20px;padding:8px 11px;background:#1dbb8b22;color:#a5ffdc;border:1px solid #7fffd166;font-size:11px;font-weight:700}
+.float-chip{position:absolute;background:#fff;color:#203354;padding:13px 16px;border-radius:14px;box-shadow:0 15px 35px #0003;font-size:12px;font-weight:700}.float-chip i{color:#2dba91;font-size:18px;margin-right:7px}.chip-one{top:24px;right:-5px}.chip-two{bottom:25px;left:-15px}
+.trust-strip{background:#fff;box-shadow:0 8px 30px #1a32600a;position:relative;margin-top:-1px}.trust-inner{width:min(1120px,90%);margin:auto;display:grid;grid-template-columns:repeat(3,1fr);padding:25px 0}.trust-item{display:flex;align-items:center;justify-content:center;gap:13px;border-right:1px solid #e8edf5}.trust-item:last-child{border:0}.trust-icon{width:43px;height:43px;border-radius:13px;background:#edf3ff;color:#3c68ed;display:grid;place-items:center;font-size:20px}.trust-item strong{display:block;font-family:Manrope;font-size:14px}.trust-item small{color:#7b879b;font-size:12px}
+.features{width:min(1120px,90%);margin:78px auto 85px}.section-head{text-align:center;margin-bottom:35px}.section-head .kicker{font-size:12px;color:#426cf8;font-weight:800;letter-spacing:1.8px;text-transform:uppercase}.section-head h2{font:800 clamp(27px,3vw,38px) Manrope;margin:12px 0;color:var(--navy)}.section-head p{color:var(--muted);max-width:600px;margin:auto;line-height:1.7}
+.feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.feature{background:white;border:1px solid #e9eef7;border-radius:18px;padding:26px;box-shadow:0 10px 35px #1d37600a;transition:.2s}.feature:hover{transform:translateY(-5px);box-shadow:0 18px 42px #1d376018}.feature-icon{width:50px;height:50px;border-radius:15px;background:linear-gradient(135deg,#eaf0ff,#e8fbff);display:grid;place-items:center;color:#3d68f2;font-size:23px;margin-bottom:18px}.feature h3{font:700 17px Manrope;margin:0 0 9px}.feature p{color:#758198;font-size:13px;line-height:1.7;margin:0}
+.bottom-cta{width:min(1120px,90%);margin:0 auto 70px;border-radius:24px;padding:34px 40px;background:linear-gradient(110deg,#172b53,#315ee0);color:white;display:flex;align-items:center;justify-content:space-between;gap:25px}.bottom-cta h2{font:800 25px Manrope;margin:0 0 7px}.bottom-cta p{color:#d1dcf5;margin:0;font-size:14px}.bottom-cta a{background:white;color:#2855d7;padding:13px 19px;border-radius:11px;font-weight:800;white-space:nowrap}
+footer{padding:25px 5%;background:#101b35;color:#aebbd2;text-align:center;font-size:12px}footer strong{color:white}
+@media(max-width:850px){.hero-inner{grid-template-columns:1fr;padding:65px 0}.hero-visual{min-height:310px}.feature-grid{grid-template-columns:1fr 1fr}.nav-right span:first-child{display:none}}
+@media(max-width:560px){.site-nav{height:70px;padding:0 18px}.brand{font-size:15px}.brand-mark{width:39px;height:39px}.nav-right{gap:8px}.nav-right span{display:none}.hero-inner{width:88%;padding:55px 0}.hero-copy{font-size:15px}.hero-visual{min-height:280px}.visual-photo{height:175px}.chip-one{right:-4px}.chip-two{left:-4px}.trust-inner{grid-template-columns:1fr;gap:17px;padding:22px 0}.trust-item{border:0;justify-content:flex-start}.features{margin:55px auto}.feature-grid{grid-template-columns:1fr}.bottom-cta{padding:27px;align-items:flex-start;flex-direction:column}.bottom-cta a{width:100%;text-align:center;justify-content:center}}
+</style>
+</head>
+<body>
+<header class="site-nav">
+ <a class="brand" href="/"><span class="brand-mark"><i class="bi bi-mortarboard-fill"></i></span><span>RGUKT HUB<small>SMART ATTENDANCE PORTAL</small></span></a>
+ <div class="nav-right"><span><i class="bi bi-shield-check"></i> Secure portal</span><span><i class="bi bi-camera-video"></i> Smart attendance</span></div>
+</header>
+<section class="hero"><div class="hero-inner">
+ <div>
+  <div class="eyebrow"><i class="bi bi-stars"></i> Campus attendance, reimagined</div>
+  <h1>Smarter attendance.<br><span>Simpler campus life.</span></h1>
+  <p class="hero-copy">A unified digital hub for students and faculty. Manage classes, access attendance records and explore browser-based face recognition for classroom attendance — all in one place.</p>
+  <div class="actions">
+   {% if setup_needed %}
+    <a class="btn-main" href="/setup"><i class="bi bi-person-gear"></i> Initial Admin Setup <i class="bi bi-arrow-right"></i></a>
+   {% else %}
+    <a class="btn-main" href="/login"><i class="bi bi-person-badge"></i> Admin / Faculty Login <i class="bi bi-arrow-right"></i></a>
+   {% endif %}
+   <a class="btn-alt" href="/student_login"><i class="bi bi-mortarboard"></i> Student Login</a>
+  </div>
+ </div>
+ <div class="hero-visual">
+  <div class="float-chip chip-one"><i class="bi bi-check-circle-fill"></i> Attendance made simple</div>
+  <div class="visual-card"><div class="visual-photo"><div class="photo-tag"><i class="bi bi-camera-video-fill"></i> Smart classroom experience</div></div><div class="visual-bottom"><div><strong>Student Hub</strong><small>One portal · Three user roles</small></div><span class="live-pill"><i class="bi bi-circle-fill"></i> ONLINE PORTAL</span></div></div>
+  <div class="float-chip chip-two"><i class="bi bi-people-fill"></i> Student · Faculty · Admin</div>
+ </div>
+</div></section>
+<section class="trust-strip"><div class="trust-inner">
+ <div class="trust-item"><span class="trust-icon"><i class="bi bi-person-lock"></i></span><div><strong>Role-based access</strong><small>Dedicated user portals</small></div></div>
+ <div class="trust-item"><span class="trust-icon"><i class="bi bi-camera"></i></span><div><strong>Smart face recognition</strong><small>Browser-based classroom workflow</small></div></div>
+ <div class="trust-item"><span class="trust-icon"><i class="bi bi-database-check"></i></span><div><strong>Centralized records</strong><small>PostgreSQL-backed data</small></div></div>
+</div></section>
+<section class="features"><div class="section-head"><div class="kicker">One platform for your campus</div><h2>Everything in one smart hub</h2><p>Simple tools for everyday academic attendance workflows, with dedicated access for each role.</p></div>
+ <div class="feature-grid">
+  <article class="feature"><div class="feature-icon"><i class="bi bi-person-gear"></i></div><h3>Admin Control</h3><p>Manage departments, faculty and student accounts. Create subjects, allocate classes and maintain assignments from one place.</p></article>
+  <article class="feature"><div class="feature-icon"><i class="bi bi-camera-video"></i></div><h3>AI Face Attendance</h3><p>Enroll student faces and let faculty scan multiple visible faces in a classroom camera view before reviewing attendance.</p></article>
+  <article class="feature"><div class="feature-icon"><i class="bi bi-clipboard2-data"></i></div><h3>Attendance Reports</h3><p>Keep attendance records organized by class and date, with faculty access to the relevant reporting workflow.</p></article>
+ </div>
+</section>
+<section class="bottom-cta"><div><h2>Welcome to your digital campus hub.</h2><p>Choose your portal and get started with the Student Hub Attendance System.</p></div><a href="/login"><i class="bi bi-box-arrow-in-right"></i> Enter Faculty Portal</a></section>
+<footer><strong>RGUKT Smart Attendance System</strong> · Student Hub Portal · Built for academic use</footer>
+</body></html>
