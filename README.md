@@ -32,7 +32,7 @@ The application is deployed as a Render Web Service and uses a PostgreSQL databa
 - 🔐 Separate Admin, Faculty and Student account workflows.
 - 🏢 Department management.
 - 👨‍🏫 Faculty account creation, password reset and removal.
-- 🎓 Student account creation, student details, password reset and face enrollment.
+- 🎓 Student account creation, full profile editing (Hub ID, name, department, semester, section and optional photo), password reset, face enrollment and admin deletion.
 - 📚 Subject creation and faculty/class allocation.
 - 🧭 Admin view of current class allocations, including assigned faculty.
 - ✏️ Edit class allocation details and reassign faculty.
