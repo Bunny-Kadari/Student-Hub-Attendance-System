@@ -347,12 +347,18 @@ def delete_student(student_id):
         with conn.cursor() as cur:
             cur.execute("SELECT hub_id FROM students WHERE id=%s", (student_id,))
             row = cur.fetchone()
-            cur.execute("DELETE FROM students WHERE id=%s", (student_id,))
+            if row:
+                # Attendance and face descriptors are removed by the students table's ON DELETE CASCADE.
+                cur.execute("DELETE FROM students WHERE id=%s", (student_id,))
     if row:
         image_path = os.path.join(app.config["UPLOAD_FOLDER"], secure_filename(row["hub_id"]) + ".jpg")
         if os.path.exists(image_path):
             os.remove(image_path)
+        flash("Student account, face descriptor and attendance records deleted.", "warning")
+    else:
+        flash("Student not found.", "danger")
     return redirect(url_for("admin_panel"))
+
 
 @app.route("/edit_student/<int:student_id>", methods=["GET", "POST"])
 def edit_student(student_id):
@@ -364,359 +370,37 @@ def edit_student(student_id):
             student = cur.fetchone()
             if not student:
                 return "Student not found", 404
+            cur.execute("SELECT id,dept_name FROM departments ORDER BY dept_name")
+            departments = cur.fetchall()
             if request.method == "POST":
-                cur.execute("UPDATE students SET name=%s,semester=%s,section=%s WHERE id=%s",
-                            (request.form["name"],request.form["semester"],request.form.get("section",""),student_id))
+                hub_id = request.form.get("hub_id", "").strip()
+                name = request.form.get("name", "").strip()
+                dept_id = request.form.get("dept_id")
+                semester = request.form.get("semester")
+                section = request.form.get("section", "").strip()
+                if not all([hub_id, name, dept_id, semester]):
+                    flash("Hub ID, name, department and semester are required.", "danger")
+                    return render_template("edit_student.html", student=student, departments=departments)
+                try:
+                    cur.execute(
+                        """UPDATE students SET hub_id=%s,name=%s,dept_id=%s,semester=%s,section=%s
+                           WHERE id=%s""",
+                        (hub_id, name, dept_id, semester, section, student_id)
+                    )
+                except psycopg.errors.UniqueViolation:
+                    flash("That Hub ID is already assigned to another student.", "danger")
+                    return render_template("edit_student.html", student=student, departments=departments)
+                old_hub_id = student["hub_id"]
+                old_photo = os.path.join(app.config["UPLOAD_FOLDER"], secure_filename(old_hub_id) + ".jpg")
+                new_photo = os.path.join(app.config["UPLOAD_FOLDER"], secure_filename(hub_id) + ".jpg")
                 photo = request.files.get("photo")
                 if photo and photo.filename:
-                    photo.save(os.path.join(app.config["UPLOAD_FOLDER"], secure_filename(student["hub_id"])+".jpg"))
-                return redirect(url_for("student_list"))
-    return render_template("edit_student.html", student=student)
+                    photo.save(new_photo)
+                    if old_photo != new_photo and os.path.exists(old_photo):
+                        os.remove(old_photo)
+                elif old_photo != new_photo and os.path.exists(old_photo):
+                    os.replace(old_photo, new_photo)
+                flash("Student details updated successfully. Re-check class allocation if department, semester or section changed.", "success")
+                return redirect(url_for("admin_panel"))
+    return render_template("edit_student.html", student=student, departments=departments)
 
-
-@app.route("/admin/department/add", methods=["POST"])
-def add_department():
-    if not admin_required():
-        return redirect(url_for("login"))
-    dept_name = request.form.get("dept_name", "").strip().upper()
-    if not dept_name:
-        flash("Department name is required.", "danger")
-        return redirect(url_for("admin_panel"))
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("INSERT INTO departments(dept_name) VALUES (%s)", (dept_name,))
-        flash("Department added.", "success")
-    except psycopg.errors.UniqueViolation:
-        flash("Department already exists.", "danger")
-    return redirect(url_for("admin_panel"))
-
-@app.route("/admin/class/add", methods=["POST"])
-def add_class():
-    if not admin_required():
-        return redirect(url_for("login"))
-    code = request.form.get("subject_code", "").strip().upper()
-    name = request.form.get("subject_name", "").strip()
-    dept_id = request.form.get("dept_id")
-    semester = request.form.get("semester")
-    faculty_id = request.form.get("faculty_id")
-    section = request.form.get("section", "").strip()
-    if not all([code, name, dept_id, semester, faculty_id]):
-        flash("Complete all subject and class fields.", "danger")
-        return redirect(url_for("admin_panel"))
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""INSERT INTO subjects(subject_code,subject_name,dept_id,semester)
-                           VALUES (%s,%s,%s,%s) RETURNING id""", (code,name,dept_id,semester))
-            subject_id = cur.fetchone()["id"]
-            cur.execute("""INSERT INTO classes(subject_id,faculty_id,semester,section)
-                           VALUES (%s,%s,%s,%s)""", (subject_id,faculty_id,semester,section))
-    flash("Subject created and class assigned.", "success")
-    return redirect(url_for("admin_panel"))
-
-
-@app.route("/admin/class/<int:class_id>/edit", methods=["GET","POST"])
-def edit_class(class_id):
-    if not admin_required():
-        return redirect(url_for("login"))
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""SELECT c.id,c.semester,c.section,c.subject_id,c.faculty_id,
-                                  s.subject_code,s.subject_name,s.dept_id
-                           FROM classes c JOIN subjects s ON s.id=c.subject_id
-                           WHERE c.id=%s""",(class_id,))
-            class_row=cur.fetchone()
-            if not class_row:
-                return "Class not found",404
-            cur.execute("SELECT id,dept_name FROM departments ORDER BY dept_name")
-            departments=cur.fetchall()
-            cur.execute("SELECT id,username FROM users WHERE role='faculty' ORDER BY username")
-            faculty=cur.fetchall()
-            if request.method=="POST":
-                code=request.form.get("subject_code","").strip().upper()
-                name=request.form.get("subject_name","").strip()
-                dept_id=request.form.get("dept_id")
-                semester=request.form.get("semester")
-                faculty_id=request.form.get("faculty_id")
-                section=request.form.get("section","").strip()
-                if not all([code,name,dept_id,semester,faculty_id]):
-                    flash("Complete all class details.","danger")
-                else:
-                    cur.execute("""UPDATE subjects SET subject_code=%s,subject_name=%s,
-                                   dept_id=%s,semester=%s WHERE id=%s""",
-                                (code,name,dept_id,semester,class_row["subject_id"]))
-                    cur.execute("""UPDATE classes SET semester=%s,section=%s,faculty_id=%s
-                                   WHERE id=%s""",(semester,section,faculty_id,class_id))
-                    flash("Class allocation updated successfully.","success")
-                    return redirect(url_for("admin_panel"))
-    return render_template("edit_class.html", class_row=class_row,
-                           departments=departments, faculty=faculty)
-
-
-@app.route("/admin/class/<int:class_id>/delete", methods=["POST"])
-def delete_class(class_id):
-    if not admin_required():
-        return redirect(url_for("login"))
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM classes WHERE id=%s RETURNING subject_id",(class_id,))
-            deleted=cur.fetchone()
-            if deleted:
-                cur.execute("DELETE FROM subjects WHERE id=%s AND NOT EXISTS "
-                            "(SELECT 1 FROM classes WHERE subject_id=%s)",
-                            (deleted["subject_id"],deleted["subject_id"]))
-    flash("Class allocation and its attendance records deleted." if deleted
-          else "Class allocation not found.","warning" if deleted else "danger")
-    return redirect(url_for("admin_panel"))
-
-
-@app.route("/admin/user/<int:user_id>/reset-password", methods=["POST"])
-def reset_faculty_password(user_id):
-    if not admin_required():
-        return redirect(url_for("login"))
-    password = request.form.get("password", "")
-    if len(password) < 10:
-        flash("New password must contain at least 10 characters.", "danger")
-        return redirect(url_for("admin_panel"))
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE users SET password_hash=%s WHERE id=%s AND role='faculty'",
-                        (generate_password_hash(password),user_id))
-            changed = cur.rowcount
-    flash("Faculty password updated." if changed else "Faculty account not found.", "success" if changed else "danger")
-    return redirect(url_for("admin_panel"))
-
-@app.route("/admin/student/<int:student_id>/reset-password", methods=["POST"])
-def reset_student_password(student_id):
-    if not admin_required():
-        return redirect(url_for("login"))
-    password = request.form.get("password", "")
-    if len(password) < 10:
-        flash("New password must contain at least 10 characters.", "danger")
-        return redirect(url_for("admin_panel"))
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE students SET password_hash=%s WHERE id=%s",
-                        (generate_password_hash(password),student_id))
-            changed = cur.rowcount
-    flash("Student password updated." if changed else "Student not found.", "success" if changed else "danger")
-    return redirect(url_for("admin_panel"))
-
-@app.route("/change_password", methods=["GET", "POST"])
-def change_password():
-    is_student = "student_id" in session
-    is_user = "user_id" in session
-    if not (is_student or is_user):
-        return redirect(url_for("login"))
-    error = None
-    if request.method == "POST":
-        current = request.form.get("current_password", "")
-        new = request.form.get("new_password", "")
-        confirm = request.form.get("confirm_password", "")
-        if len(new) < 10:
-            error = "New password must contain at least 10 characters."
-        elif new != confirm:
-            error = "New passwords do not match."
-        else:
-            table, key, record_id = ("students","id",session["student_id"]) if is_student else ("users","id",session["user_id"])
-            with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT password_hash FROM {table} WHERE {key}=%s", (record_id,))
-                    row = cur.fetchone()
-                    if not row or not check_password_hash(row["password_hash"], current):
-                        error = "Current password is incorrect."
-                    else:
-                        cur.execute(f"UPDATE {table} SET password_hash=%s WHERE {key}=%s",
-                                    (generate_password_hash(new),record_id))
-            if not error:
-                flash("Password changed successfully.", "success")
-                return redirect(url_for("student_dashboard" if is_student else "dashboard"))
-    return render_template("change_password.html", error=error)
-
-@app.route("/attendance/<int:class_id>", methods=["GET", "POST"])
-def attendance(class_id):
-    if not login_required():
-        return redirect(url_for("login"))
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            if session.get("role") != "admin":
-                cur.execute("SELECT 1 FROM classes WHERE id=%s AND faculty_id=%s",
-                            (class_id, session.get("user_id")))
-                if not cur.fetchone():
-                    return "Access denied", 403
-            cur.execute("SELECT id,name FROM students ORDER BY name")
-            students = cur.fetchall()
-            if request.method == "POST":
-                selected_date = request.form["date"]
-                for student in students:
-                    status = request.form.get(f"status_{student['id']}")
-                    if status in ("Present","Absent"):
-                        cur.execute("""INSERT INTO attendance(student_id,class_id,date,status)
-                                       VALUES (%s,%s,%s,%s)
-                                       ON CONFLICT(student_id,class_id,date)
-                                       DO UPDATE SET status=EXCLUDED.status""",
-                                    (student["id"],class_id,selected_date,status))
-    return render_template("attendance.html", students=students, class_id=class_id,
-                           success=request.method == "POST")
-
-@app.route("/view_report/<int:class_id>")
-def view_report(class_id):
-    if not login_required():
-        return redirect(url_for("login"))
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            if session.get("role") != "admin":
-                cur.execute("SELECT 1 FROM classes WHERE id=%s AND faculty_id=%s",
-                            (class_id, session.get("user_id")))
-                if not cur.fetchone():
-                    return "Access denied", 403
-            cur.execute("""SELECT students.name,attendance.date,attendance.status
-                           FROM attendance JOIN students ON attendance.student_id=students.id
-                           WHERE attendance.class_id=%s ORDER BY attendance.date DESC""", (class_id,))
-            records = cur.fetchall()
-    return render_template("view_report.html", records=records)
-
-@app.route("/student_login", methods=["GET","POST"])
-def student_login():
-    error = None
-    if request.method == "POST":
-        hub_id = request.form.get("hub_id","").strip()
-        password = request.form.get("password","")
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT * FROM students WHERE hub_id=%s", (hub_id,))
-                student = cur.fetchone()
-        if student and check_password_hash(student["password_hash"], password):
-            session.clear()
-            session["student_id"] = student["id"]
-            session["student_name"] = student["name"]
-            session["role"] = "student"
-            return redirect(url_for("student_dashboard"))
-        error = "Invalid Hub ID or password."
-    return render_template("student_login.html", error=error)
-
-@app.route("/student_dashboard")
-def student_dashboard():
-    if "student_id" not in session:
-        return redirect(url_for("student_login"))
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) AS n FROM attendance WHERE student_id=%s",
-                        (session["student_id"],))
-            total_classes = cur.fetchone()["n"] or 0
-            cur.execute("SELECT COUNT(*) AS n FROM attendance WHERE student_id=%s AND status='Present'",
-                        (session["student_id"],))
-            total_present = cur.fetchone()["n"] or 0
-            cur.execute("SELECT date,status FROM attendance WHERE student_id=%s ORDER BY date",
-                        (session["student_id"],))
-            records = cur.fetchall()
-    percentage = round((total_present / total_classes) * 100, 2) if total_classes else 0
-    dates = [str(r["date"]) for r in records]
-    status_values = [1 if r["status"] == "Present" else 0 for r in records]
-    return render_template("student_dashboard.html", name=session["student_name"],
-                           total_classes=total_classes,total_present=total_present,
-                           percentage=percentage,records=records,dates=dates,status_values=status_values)
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("home"))
-
-def get_class_access(class_id):
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""SELECT c.id,c.semester,c.section,s.dept_id,s.subject_name
-                           FROM classes c JOIN subjects s ON s.id=c.subject_id
-                           WHERE c.id=%s AND (%s='admin' OR c.faculty_id=%s)""",
-                        (class_id, session.get("role"), session.get("user_id")))
-            return cur.fetchone()
-
-
-@app.route("/start_ai/<int:class_id>")
-def start_ai(class_id):
-    if not login_required():
-        return redirect(url_for("login"))
-    class_info = get_class_access(class_id)
-    if not class_info:
-        return "Access denied", 403
-    return render_template("face_attendance.html", class_info=class_info)
-
-
-@app.route("/api/face-roster/<int:class_id>")
-def face_roster(class_id):
-    if not login_required():
-        return {"error": "Login required."}, 401
-    class_info = get_class_access(class_id)
-    if not class_info:
-        return {"error": "Access denied."}, 403
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""SELECT COUNT(*) AS total,
-                                  COUNT(*) FILTER (WHERE COALESCE(section,'')=COALESCE(%s,'')) AS section_total
-                           FROM students WHERE dept_id=%s AND semester=%s""",
-                        (class_info["section"],class_info["dept_id"],class_info["semester"]))
-            counts=cur.fetchone()
-            cur.execute("""SELECT COUNT(DISTINCT st.id) AS enrolled
-                           FROM students st JOIN face_data fd ON fd.student_id=st.id
-                           WHERE st.dept_id=%s AND st.semester=%s AND fd.descriptor IS NOT NULL""",
-                        (class_info["dept_id"],class_info["semester"]))
-            enrolled=cur.fetchone()["enrolled"]
-            cur.execute("""SELECT st.id,st.hub_id,st.name,fd.descriptor
-                           FROM students st JOIN face_data fd ON fd.student_id=st.id
-                           WHERE st.dept_id=%s AND st.semester=%s
-                             AND COALESCE(st.section,'')=COALESCE(%s,'')
-                             AND fd.descriptor IS NOT NULL ORDER BY st.name""",
-                        (class_info["dept_id"],class_info["semester"],class_info["section"]))
-            rows=cur.fetchall()
-    return {"students":[{"id":r["id"],"hub_id":r["hub_id"],"name":r["name"],"descriptor":r["descriptor"]} for r in rows],
-            "registered_count":len(rows),"class_strength":counts["section_total"],
-            "students_in_department_semester":counts["total"],
-            "registered_in_department_semester":enrolled,
-            "class_section":class_info["section"] or ""}
-
-
-@app.route("/api/face-attendance/<int:class_id>", methods=["POST"])
-def save_face_attendance(class_id):
-    if not login_required():
-        return {"error":"Login required."},401
-    class_info=get_class_access(class_id)
-    if not class_info:
-        return {"error":"Access denied."},403
-    payload=request.get_json(silent=True) or {}
-    ids=payload.get("recognized_ids",[])
-    if not isinstance(ids,list) or len(ids)>500:
-        return {"error":"Invalid attendance list."},400
-    try:
-        ids=list({int(value) for value in ids})
-    except (TypeError,ValueError):
-        return {"error":"Invalid student IDs."},400
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""SELECT id FROM students WHERE dept_id=%s AND semester=%s
-                           AND COALESCE(section,'')=COALESCE(%s,'')""",
-                        (class_info["dept_id"],class_info["semester"],class_info["section"]))
-            eligible={row["id"] for row in cur.fetchall()}
-            if not set(ids).issubset(eligible):
-                return {"error":"A student does not belong to this class."},400
-            cur.execute("""INSERT INTO attendance(student_id,class_id,date,status)
-                           SELECT id,%s,CURRENT_DATE,'Absent' FROM students
-                           WHERE dept_id=%s AND semester=%s AND COALESCE(section,'')=COALESCE(%s,'')
-                           ON CONFLICT(student_id,class_id,date) DO UPDATE SET status='Absent'""",
-                        (class_id,class_info["dept_id"],class_info["semester"],class_info["section"]))
-            if ids:
-                cur.execute("""UPDATE attendance SET status='Present'
-                               WHERE class_id=%s AND date=CURRENT_DATE AND student_id=ANY(%s)""",
-                            (class_id,ids))
-    return {"status":"saved","present_count":len(ids),"class_strength":len(eligible),"message":"Attendance saved."}
-
-
-@app.route("/health")
-def health():
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-            cur.fetchone()
-    return {"status": "ok"}
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5001)))
